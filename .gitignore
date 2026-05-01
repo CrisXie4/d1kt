@@ -1,0 +1,9 @@
+.cache/
+.claude/
+__pycache__/
+*.pyc
+desktop.ini
+
+# Local assistant instructions
+AGENTS.md
+CLAUDE.md

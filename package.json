@@ -1,0 +1,12 @@
+{
+  "name": "d1kt-node-harness",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Node.js test harness for study-words fetch and high-throughput word-record submission.",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

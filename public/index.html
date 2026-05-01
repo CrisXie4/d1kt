@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>D1KT Harness</title>
+    <link rel="stylesheet" href="/style.css">
+  </head>
+  <body>
+    <main class="layout">
+      <section class="panel">
+        <h1>D1KT 测试面板</h1>
+        <p class="muted">前端只负责录入和展示，真正的请求调度在 Node 后端完成，页面不会因为高并发而卡死。</p>
+
+        <form id="job-form" class="form">
+          <label>
+            <span>Base URL</span>
+            <input id="baseUrl" name="baseUrl" value="https://d1kt.cn" required>
+          </label>
+          <label>
+            <span>study-words 路径</span>
+            <input id="studyPathPrefix" name="studyPathPrefix" value="/api/api/vocabulary/study-words/" required>
+          </label>
+          <label>
+            <span>word-record 路径</span>
+            <input id="recordPath" name="recordPath" value="/api/api/vocabulary/word-record" required>
+          </label>
+          <label>
+            <span>用户 ID</span>
+            <input id="userId" name="userId" placeholder="输入用户 ID" required>
+          </label>
+          <label>
+            <span>单词数量 (count)</span>
+            <input id="wordCount" name="wordCount" type="number" min="1" max="500" value="100">
+          </label>
+          <label>
+            <span>JWT</span>
+            <textarea id="jwt" name="jwt" rows="4" placeholder="输入 JWT" required></textarea>
+          </label>
+          <label>
+            <span>connect.sid</span>
+            <textarea id="connectSid" name="connectSid" rows="3" placeholder="输入 connect.sid" required></textarea>
+          </label>
+
+          <div class="grid">
+            <label>
+              <span>并发数</span>
+              <input id="concurrency" name="concurrency" type="number" min="1" max="256" value="48">
+            </label>
+            <label>
+              <span>超时(ms)</span>
+              <input id="requestTimeoutMs" name="requestTimeoutMs" type="number" min="1000" max="60000" value="15000">
+            </label>
+          </div>
+
+          <label class="checkbox">
+            <input id="useCache" name="useCache" type="checkbox" checked>
+            <span>缓存已获取的单词（按用户 ID + count 存本地磁盘）</span>
+          </label>
+
+          <label class="checkbox">
+            <input id="jwtInBody" name="jwtInBody" type="checkbox">
+            <span>POST 请求时额外把 JWT 放进 JSON body</span>
+          </label>
+
+          <button id="submitButton" type="submit">开始测试</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>任务状态</h2>
+        <div class="status">
+          <div><strong>状态</strong><span id="status">idle</span></div>
+          <div><strong>单词数</strong><span id="wordCount">0</span></div>
+          <div><strong>成功请求</strong><span id="successCount">0</span></div>
+          <div><strong>失败请求</strong><span id="failedCount">0</span></div>
+          <div><strong>总请求</strong><span id="totalCount">0</span></div>
+        </div>
+
+        <div class="progress">
+          <div id="progressBar"></div>
+        </div>
+
+        <pre id="logBox" class="log-box">等待任务开始...</pre>
+      </section>
+
+      <section class="panel full-width">
+        <h2>单词列表</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Word ID</th>
+                <th>单词</th>
+                <th>意思</th>
+                <th>音标</th>
+              </tr>
+            </thead>
+            <tbody id="wordTable"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
