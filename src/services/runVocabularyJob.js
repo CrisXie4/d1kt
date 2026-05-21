@@ -76,7 +76,6 @@ async function runVocabularyJob(jobId) {
 
     await runPool(tasks, job.config.concurrency, async (task) => {
       try {
-        const startTime = new Date();
         const attempt = await createTestAttempt(job.config, {
           testType: task.testType,
           vocabularyId: task.wordSetId,
@@ -89,20 +88,22 @@ async function runVocabularyJob(jobId) {
           throw new Error(`Invalid test-attempt response for ${task.testType}.`);
         }
 
-        const endTime = new Date();
+        const timing = buildAttemptTiming(attempt, questions.length);
         await saveTestRecord(job.config, {
-          answers: questions.map((question, index) => toRecordAnswer(question, task.words, startTime, endTime, index)),
+          answers: questions.map((question, index) =>
+            toRecordAnswer(question, task.words, timing.startTime, timing.endTime, index, questions.length)
+          ),
           attemptId: attempt.attemptId,
           message: "测试记录已保存",
           stats: {
             accuracy: 0,
             correctWords: questions.length,
-            duration: Math.max(0.1, (endTime.getTime() - startTime.getTime()) / 1000),
-            endTime: endTime.toISOString(),
-            startTime: startTime.toISOString(),
+            duration: timing.duration,
+            endTime: timing.endTime.toISOString(),
+            startTime: timing.startTime.toISOString(),
             totalWords: questions.length
           },
-          submittedAt: endTime.toISOString()
+          submittedAt: timing.endTime.toISOString()
         });
         succeededRecords += 1;
       } catch (error) {
@@ -154,12 +155,36 @@ function toAttemptWord(word) {
   };
 }
 
-function toRecordAnswer(question, words, startTime, endTime, index) {
+function buildAttemptTiming(attempt, questionCount) {
+  const expiresAt = new Date(attempt.expiresAt);
+  const startOffsetMs = randomInt(3 * 60 * 1000, 8 * 60 * 1000);
+  const startTime = Number.isFinite(expiresAt.getTime())
+    ? new Date(expiresAt.getTime() - startOffsetMs)
+    : new Date();
+  const duration = Math.max(18.1, Math.min(180, questionCount * randomFloat(1.1, 2.4)));
+  const endTime = new Date(startTime.getTime() + duration * 1000);
+
+  return {
+    duration,
+    endTime,
+    startTime
+  };
+}
+
+function randomFloat(min, max) {
+  return min + Math.random() * (max - min);
+}
+
+function randomInt(min, max) {
+  return Math.floor(randomFloat(min, max + 1));
+}
+
+function toRecordAnswer(question, words, startTime, endTime, index, totalQuestions) {
   const word = words.find((item) => item.wordId === question.wordId) || {};
   const answer = word.word || question.word || question.translation || question.wordId;
-  const submittedAt = new Date(
-    Math.min(endTime.getTime(), startTime.getTime() + 500 + index * 100)
-  ).toISOString();
+  const total = Math.max(1, totalQuestions);
+  const answerOffsetMs = Math.round(((index + 1) / total) * (endTime.getTime() - startTime.getTime()));
+  const submittedAt = new Date(startTime.getTime() + answerOffsetMs).toISOString();
 
   return {
     answer,
