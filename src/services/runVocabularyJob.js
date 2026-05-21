@@ -70,7 +70,7 @@ async function runVocabularyJob(jobId) {
     await runPool(tasks, job.config.concurrency, async (task) => {
       try {
         await postWordRecord(job.config, {
-          isCorrect: false,
+          isCorrect: true,
           testType: task.testType,
           wordId: task.wordId
         });
