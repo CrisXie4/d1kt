@@ -113,7 +113,6 @@ function normalizeConfig(body) {
   const attemptPath = ensureOptionalPath(body.attemptPath, "/api/api/vocabulary/test-attempt");
   const recordPath = ensureOptionalPath(body.recordPath, "/api/api/vocabulary/test-record");
 
-  const concurrency = clampNumber(body.concurrency, 1, 256, 48);
   const requestTimeoutMs = clampNumber(body.requestTimeoutMs, 1000, 60000, 15000);
   const wordCount = clampNumber(body.wordCount, 1, 500, 100);
   const jwtInBody = Boolean(body.jwtInBody);
@@ -122,7 +121,6 @@ function normalizeConfig(body) {
   return {
     baseUrl,
     attemptPath,
-    concurrency,
     connectSid,
     jwt,
     jwtCookieName: "token",

@@ -9,7 +9,6 @@ const {
   updateProgress
 } = require("./jobStore");
 const { TEST_TYPES, createTestAttempt, fetchStudyWords, saveTestRecord } = require("./d1ktClient");
-const { runPool } = require("./workerPool");
 const { extractWords } = require("../utils/extractWords");
 const { readCache, writeCache } = require("./wordCache");
 
@@ -62,91 +61,91 @@ async function runVocabularyJob(jobId) {
       appendLog(jobId, `Multiple word sets found; using ${wordSetId}.`);
     }
 
-    const tasks = TEST_TYPES.map((testType) => ({
-      testType,
-      wordSetId,
-      words
-    }));
+    updateProgress(jobId, { totalRecords: TEST_TYPES.length });
+    appendLog(jobId, `Dispatching ${TEST_TYPES.length} independent test-attempt/test-record flows.`);
 
-    let succeededRecords = 0;
-    let failedRecords = 0;
-    let completedRecords = 0;
+    const progress = {
+      completed: 0,
+      failed: 0,
+      succeeded: 0
+    };
 
-    updateProgress(jobId, { totalRecords: tasks.length });
-    appendLog(jobId, `Dispatching ${tasks.length} test-attempt/test-record flows with concurrency ${job.config.concurrency}.`);
-
-    await runPool(tasks, job.config.concurrency, async (task) => {
-      try {
-        const wordsById = new Map(task.words.map((word) => [word.wordId, word]));
-        const attemptStartedAt = Date.now();
-        const attempt = await createTestAttempt(job.config, {
-          wordSetId: task.wordSetId,
-          testType: task.testType,
-          wordIds: task.words.map((word) => word.wordId)
-        });
-        const questions = Array.isArray(attempt?.questions) ? attempt.questions : [];
-        if (!attempt?.attemptId || questions.length === 0) {
-          throw new Error(`Invalid test-attempt response for ${task.testType}.`);
-        }
-
-        const initialDelayMs = randomInt(3000, 6000);
-        let cursorMs = attemptStartedAt + initialDelayMs;
-        const answers = questions.map((question) => {
-          cursorMs += randomInt(700, 1500);
-          const submittedAt = cursorMs;
-          const userAnswer = pickUserAnswer(question, wordsById, task.testType);
-          const answerProof = computeAnswerProof(
-            attempt.attemptId,
-            question.questionToken,
-            submittedAt,
-            userAnswer
-          );
-          return {
-            questionToken: question.questionToken,
-            userAnswer,
-            submittedAt,
-            answerProof
-          };
-        });
-
-        const lastSubmittedAt = answers[answers.length - 1].submittedAt;
-        const waitMs = lastSubmittedAt - Date.now() + 500;
-        if (waitMs > 0) {
-          await sleep(waitMs);
-        }
-
-        appendLog(
-          jobId,
-          `[${task.testType}] answered ${answers.length} questions over ${((lastSubmittedAt - attemptStartedAt) / 1000).toFixed(1)}s`
-        );
-
-        await saveTestRecord(job.config, {
-          attemptId: attempt.attemptId,
-          answers
-        });
-        succeededRecords += 1;
-      } catch (error) {
-        failedRecords += 1;
-        appendLog(jobId, `Failed ${task.testType}: ${error.message}`);
-      } finally {
-        completedRecords += 1;
-        updateProgress(jobId, {
-          failedRecords,
-          succeededRecords,
-          totalRecords: tasks.length
-        });
-
-        if (completedRecords % 25 === 0 || completedRecords === tasks.length) {
-          appendLog(jobId, `Progress ${completedRecords}/${tasks.length}.`);
-        }
-      }
-    });
+    await Promise.all(
+      TEST_TYPES.map((testType) =>
+        runTestType({ job, jobId, progress, testType, words, wordSetId })
+      )
+    );
 
     markCompleted(jobId);
-    appendLog(jobId, `Completed. Success ${succeededRecords}, failed ${failedRecords}.`);
+    appendLog(jobId, `Completed. Success ${progress.succeeded}, failed ${progress.failed}.`);
   } catch (error) {
     markFailed(jobId, error);
     appendLog(jobId, `Job failed: ${error.message}`);
+  }
+}
+
+async function runTestType({ job, jobId, progress, testType, words, wordSetId }) {
+  const wordsById = new Map(words.map((word) => [word.wordId, word]));
+
+  try {
+    const attemptStartedAt = Date.now();
+    const attempt = await createTestAttempt(job.config, {
+      wordSetId,
+      testType,
+      wordIds: words.map((word) => word.wordId)
+    });
+    const questions = Array.isArray(attempt?.questions) ? attempt.questions : [];
+    if (!attempt?.attemptId || questions.length === 0) {
+      throw new Error(`Invalid test-attempt response for ${testType}.`);
+    }
+
+    const initialDelayMs = randomInt(3000, 6000);
+    let cursorMs = attemptStartedAt + initialDelayMs;
+    const answers = questions.map((question) => {
+      cursorMs += randomInt(700, 1500);
+      const submittedAt = cursorMs;
+      const userAnswer = pickUserAnswer(question, wordsById, testType);
+      const answerProof = computeAnswerProof(
+        attempt.attemptId,
+        question.questionToken,
+        submittedAt,
+        userAnswer
+      );
+      return {
+        questionToken: question.questionToken,
+        userAnswer,
+        submittedAt,
+        answerProof
+      };
+    });
+
+    const lastSubmittedAt = answers[answers.length - 1].submittedAt;
+    const waitMs = lastSubmittedAt - Date.now() + 500;
+    if (waitMs > 0) {
+      await sleep(waitMs);
+    }
+
+    appendLog(
+      jobId,
+      `[${testType}] answered ${answers.length} questions over ${((lastSubmittedAt - attemptStartedAt) / 1000).toFixed(1)}s`
+    );
+
+    await saveTestRecord(job.config, {
+      attemptId: attempt.attemptId,
+      answers
+    });
+    progress.succeeded += 1;
+  } catch (error) {
+    progress.failed += 1;
+    appendLog(jobId, `Failed ${testType}: ${error.message}`);
+  } finally {
+    progress.completed += 1;
+    updateProgress(jobId, {
+      failedRecords: progress.failed,
+      succeededRecords: progress.succeeded,
+      totalRecords: TEST_TYPES.length
+    });
+    appendLog(jobId, `Progress ${progress.completed}/${TEST_TYPES.length}.`);
   }
 }
 
