@@ -23,6 +23,7 @@ form.addEventListener("submit", async (event) => {
   try {
     const payload = {
       baseUrl: document.getElementById("baseUrl").value.trim(),
+      attemptPath: document.getElementById("attemptPath").value.trim(),
       concurrency: Number.parseInt(document.getElementById("concurrency").value, 10),
       connectSid: document.getElementById("connectSid").value.trim(),
       jwt: document.getElementById("jwt").value.trim(),

@@ -7,7 +7,7 @@ const {
   setJobWords,
   updateProgress
 } = require("./jobStore");
-const { TEST_TYPES, fetchStudyWords, postWordRecord } = require("./d1ktClient");
+const { TEST_TYPES, createTestAttempt, fetchStudyWords, submitTestAttemptQuestion } = require("./d1ktClient");
 const { runPool } = require("./workerPool");
 const { extractWords } = require("../utils/extractWords");
 const { readCache, writeCache } = require("./wordCache");
@@ -27,7 +27,7 @@ async function runVocabularyJob(jobId) {
     if (useCache) {
       const cached = await readCache(baseUrl, userId, wordCount);
       if (cached) {
-        words = cached.words;
+        words = normalizeCachedWords(cached);
         appendLog(jobId, `Cache hit: loaded ${words.length} words from ${cached.cachedAt}.`);
       }
     }
@@ -52,11 +52,45 @@ async function runVocabularyJob(jobId) {
 
     setJobWords(jobId, words);
 
-    const tasks = words.flatMap((word) =>
-      TEST_TYPES.map((testType) => ({
+    const wordSetIds = Array.from(new Set(words.map((word) => word.wordSetId || userId).filter(Boolean)));
+    const wordSetId = wordSetIds[0];
+    if (!wordSetId) {
+      throw new Error("No wordSetId was found. Fetch study-words again or check the word set ID.");
+    }
+    if (wordSetIds.length > 1) {
+      appendLog(jobId, `Multiple word sets found; using ${wordSetId}.`);
+    }
+
+    const wordById = new Map(words.map((word) => [word.wordId, word]));
+    const attempts = [];
+    for (const testType of TEST_TYPES) {
+      appendLog(jobId, `Creating test attempt for ${testType} with wordSet ${wordSetId}.`);
+      const attempt = await createTestAttempt(job.config, {
+        count: words.length,
         testType,
-        word,
-        wordId: word.wordId
+        vocabularyId: wordSetId,
+        wordSet: wordSetId,
+        wordSetId
+      });
+      const questions = Array.isArray(attempt?.questions) ? attempt.questions : [];
+      if (!attempt?.attemptId || questions.length === 0) {
+        throw new Error(`Invalid test-attempt response for ${testType}.`);
+      }
+      attempts.push({
+        attemptId: attempt.attemptId,
+        questions,
+        testType
+      });
+      appendLog(jobId, `Created ${testType} attempt ${attempt.attemptId} with ${questions.length} questions.`);
+    }
+
+    const tasks = attempts.flatMap((attempt) =>
+      attempt.questions.map((question) => ({
+        attemptId: attempt.attemptId,
+        question,
+        testType: attempt.testType,
+        word: wordById.get(question.wordId) || question,
+        wordId: question.wordId
       }))
     );
 
@@ -65,14 +99,19 @@ async function runVocabularyJob(jobId) {
     let completedRecords = 0;
 
     updateProgress(jobId, { totalRecords: tasks.length });
-    appendLog(jobId, `Dispatching ${tasks.length} word-record requests with concurrency ${job.config.concurrency}.`);
+    appendLog(jobId, `Dispatching ${tasks.length} test-attempt submit requests with concurrency ${job.config.concurrency}.`);
 
     await runPool(tasks, job.config.concurrency, async (task) => {
       try {
-        await postWordRecord(job.config, {
+        await submitTestAttemptQuestion(job.config, {
+          attemptId: task.attemptId,
           isCorrect: true,
+          questionToken: task.question.questionToken,
           testType: task.testType,
-          wordId: task.wordId
+          vocabularyId: wordSetId,
+          wordId: task.wordId,
+          wordSet: wordSetId,
+          wordSetId
         });
         succeededRecords += 1;
       } catch (error) {
@@ -98,6 +137,17 @@ async function runVocabularyJob(jobId) {
     markFailed(jobId, error);
     appendLog(jobId, `Job failed: ${error.message}`);
   }
+}
+
+function normalizeCachedWords(cached) {
+  const words = Array.isArray(cached.words) ? cached.words : [];
+  const needsWordSet = words.some((word) => !word.wordSetId);
+  if (!needsWordSet) {
+    return words;
+  }
+
+  const extracted = extractWords(cached.rawPayload);
+  return extracted.length > 0 ? extracted : words;
 }
 
 module.exports = {

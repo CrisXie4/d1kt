@@ -54,6 +54,16 @@ function normalizeWord(item) {
   const wordId =
     firstString(item.wordId, item._id, item.id, item.word?._id, item.word?.id) || "";
 
+  const wordSetId =
+    firstString(
+      item.wordSetId,
+      item.wordSet,
+      item.vocabularyId,
+      item.vocabulary,
+      item.word?.wordSetId,
+      item.word?.wordSet
+    ) || "";
+
   const word =
     firstString(item.word, item.spelling, item.content, item.name, item.term, item.word?.word) || "";
 
@@ -81,7 +91,8 @@ function normalizeWord(item) {
     meaning,
     phonetic,
     word,
-    wordId
+    wordId,
+    wordSetId
   };
 }
 

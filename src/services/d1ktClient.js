@@ -29,6 +29,33 @@ async function postWordRecord(config, payload) {
   });
 }
 
+async function createTestAttempt(config, payload) {
+  const url = new URL(trimLeadingSlash(config.attemptPath), ensureTrailingSlash(config.baseUrl));
+  const body = config.jwtInBody ? { ...payload, jwt: config.jwt } : payload;
+
+  return requestJson(url, {
+    body: JSON.stringify(body),
+    headers: buildHeaders(config),
+    method: "POST",
+    timeoutMs: config.requestTimeoutMs
+  });
+}
+
+async function submitTestAttemptQuestion(config, payload) {
+  const path = config.recordPath
+    .replaceAll(":attemptId", encodeURIComponent(payload.attemptId))
+    .replaceAll("{attemptId}", encodeURIComponent(payload.attemptId));
+  const url = new URL(trimLeadingSlash(path), ensureTrailingSlash(config.baseUrl));
+  const body = config.jwtInBody ? { ...payload, jwt: config.jwt } : payload;
+
+  return requestJson(url, {
+    body: JSON.stringify(body),
+    headers: buildHeaders(config),
+    method: "POST",
+    timeoutMs: config.requestTimeoutMs
+  });
+}
+
 function buildHeaders(config) {
   return {
     accept: "application/json",
@@ -102,6 +129,8 @@ function truncate(value, maxLength) {
 
 module.exports = {
   TEST_TYPES,
+  createTestAttempt,
   fetchStudyWords,
-  postWordRecord
+  postWordRecord,
+  submitTestAttemptQuestion
 };

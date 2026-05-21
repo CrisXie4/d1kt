@@ -110,6 +110,7 @@ function normalizeConfig(body) {
   const connectSid = ensureString(body.connectSid, "connect.sid");
   const baseUrl = ensureString(body.baseUrl, "Base URL").replace(/\/+$/, "");
   const studyPathPrefix = ensureOptionalPath(body.studyPathPrefix, "/api/api/vocabulary/study-words/");
+  const attemptPath = ensureOptionalPath(body.attemptPath, "/api/api/vocabulary/test-attempt");
   const recordPath = ensureOptionalPath(body.recordPath, "/api/api/vocabulary/word-record");
 
   const concurrency = clampNumber(body.concurrency, 1, 256, 48);
@@ -120,6 +121,7 @@ function normalizeConfig(body) {
 
   return {
     baseUrl,
+    attemptPath,
     concurrency,
     connectSid,
     jwt,
