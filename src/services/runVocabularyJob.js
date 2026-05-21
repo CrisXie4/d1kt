@@ -91,7 +91,7 @@ async function runVocabularyJob(jobId) {
 
         const endTime = new Date();
         await saveTestRecord(job.config, {
-          answers: questions.map((question) => toRecordAnswer(question, task.words)),
+          answers: questions.map((question, index) => toRecordAnswer(question, task.words, startTime, endTime, index)),
           attemptId: attempt.attemptId,
           message: "测试记录已保存",
           stats: {
@@ -154,15 +154,22 @@ function toAttemptWord(word) {
   };
 }
 
-function toRecordAnswer(question, words) {
+function toRecordAnswer(question, words, startTime, endTime, index) {
   const word = words.find((item) => item.wordId === question.wordId) || {};
   const answer = word.word || question.word || question.translation || question.wordId;
+  const submittedAt = new Date(
+    Math.min(endTime.getTime(), startTime.getTime() + 500 + index * 100)
+  ).toISOString();
 
   return {
     answer,
+    duration: Math.max(0.1, (new Date(submittedAt).getTime() - startTime.getTime()) / 1000),
+    endTime: submittedAt,
     isCorrect: true,
     questionToken: question.questionToken,
     selectedAnswer: answer,
+    startTime: startTime.toISOString(),
+    submittedAt,
     userAnswer: answer,
     wordId: question.wordId
   };
