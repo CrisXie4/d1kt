@@ -8,14 +8,14 @@ const progressBarEl = document.getElementById("progressBar");
 const logBoxEl = document.getElementById("logBox");
 const wordTableEl = document.getElementById("wordTable");
 const submitButtonEl = document.getElementById("submitButton");
+const jobSelectEl = document.getElementById("jobSelect");
 
-let currentJobId = null;
+const jobs = new Map();
+let activeJobId = "";
 let pollTimer = null;
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  stopPolling();
-  resetView();
 
   submitButtonEl.disabled = true;
   logBoxEl.textContent = "正在创建任务...";
@@ -46,63 +46,157 @@ form.addEventListener("submit", async (event) => {
       throw new Error(data.error || "任务创建失败。");
     }
 
-    currentJobId = data.jobId;
-    statusEl.textContent = "queued";
-    logBoxEl.textContent = `任务已创建: ${currentJobId}`;
-    startPolling();
+    activeJobId = data.jobId;
+    jobs.set(data.jobId, {
+      id: data.jobId,
+      progress: {},
+      status: "queued",
+      words: [],
+      logs: [`任务已创建: ${data.jobId}`]
+    });
+    renderJobOptions();
+    renderJob(jobs.get(activeJobId));
+    ensurePolling();
   } catch (error) {
     logBoxEl.textContent = error.message;
+  } finally {
     submitButtonEl.disabled = false;
   }
 });
 
-function startPolling() {
-  pollTimer = window.setInterval(fetchJobStatus, 500);
-  fetchJobStatus();
+jobSelectEl.addEventListener("change", () => {
+  activeJobId = jobSelectEl.value;
+  const job = jobs.get(activeJobId);
+  if (job) {
+    renderJob(job);
+  } else {
+    resetView();
+  }
+});
+
+async function loadJobs() {
+  try {
+    const response = await fetch("/api/jobs");
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "任务列表获取失败。");
+    }
+
+    for (const job of data.jobs || []) {
+      jobs.set(job.id, job);
+    }
+    if (!activeJobId && data.jobs && data.jobs.length > 0) {
+      activeJobId = data.jobs[0].id;
+    }
+    renderJobOptions();
+    if (activeJobId && jobs.has(activeJobId)) {
+      renderJob(jobs.get(activeJobId));
+    }
+    ensurePolling();
+  } catch (error) {
+    logBoxEl.textContent = error.message;
+  }
 }
 
-function stopPolling() {
-  if (pollTimer) {
+function ensurePolling() {
+  if (!pollTimer) {
+    pollTimer = window.setInterval(fetchRunningJobs, 500);
+  }
+}
+
+function stopPollingIfIdle() {
+  const hasRunningJobs = Array.from(jobs.values()).some((job) => isRunning(job.status));
+  if (!hasRunningJobs && pollTimer) {
     window.clearInterval(pollTimer);
     pollTimer = null;
   }
 }
 
-async function fetchJobStatus() {
-  if (!currentJobId) {
+async function fetchRunningJobs() {
+  const runningIds = Array.from(jobs.values())
+    .filter((job) => isRunning(job.status))
+    .map((job) => job.id);
+
+  if (runningIds.length === 0) {
+    stopPollingIfIdle();
     return;
   }
 
+  await Promise.all(runningIds.map(fetchJobStatus));
+  renderJobOptions();
+  if (activeJobId && jobs.has(activeJobId)) {
+    renderJob(jobs.get(activeJobId));
+  }
+  stopPollingIfIdle();
+}
+
+async function fetchJobStatus(jobId) {
   try {
-    const response = await fetch(`/api/jobs/${currentJobId}`);
+    const response = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`);
     const job = await response.json();
 
     if (!response.ok) {
-      throw new Error(job.error || "任务状态获取失败。");
+      jobs.set(jobId, {
+        id: jobId,
+        error: job.error || "任务状态获取失败。",
+        progress: {},
+        status: "missing",
+        words: [],
+        logs: []
+      });
+      return;
     }
 
-    renderJob(job);
-
-    if (job.status === "completed" || job.status === "failed") {
-      stopPolling();
-      submitButtonEl.disabled = false;
-    }
+    jobs.set(job.id, job);
   } catch (error) {
-    stopPolling();
-    submitButtonEl.disabled = false;
-    logBoxEl.textContent = error.message;
+    const current = jobs.get(jobId) || { id: jobId, progress: {}, words: [], logs: [] };
+    jobs.set(jobId, {
+      ...current,
+      error: error.message,
+      status: "failed"
+    });
   }
 }
 
-function renderJob(job) {
-  statusEl.textContent = job.status;
-  wordCountEl.textContent = String(job.progress.fetchedWords || 0);
-  successCountEl.textContent = String(job.progress.succeededRecords || 0);
-  failedCountEl.textContent = String(job.progress.failedRecords || 0);
-  totalCountEl.textContent = String(job.progress.totalRecords || 0);
+function renderJobOptions() {
+  jobSelectEl.innerHTML = "";
 
-  const completed = (job.progress.succeededRecords || 0) + (job.progress.failedRecords || 0);
-  const total = job.progress.totalRecords || 0;
+  const allJobs = Array.from(jobs.values()).sort((a, b) => {
+    const left = b.createdAt || "";
+    const right = a.createdAt || "";
+    return left.localeCompare(right);
+  });
+
+  if (allJobs.length === 0) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "暂无任务";
+    jobSelectEl.appendChild(option);
+    return;
+  }
+
+  for (const job of allJobs) {
+    const option = document.createElement("option");
+    option.value = job.id;
+    option.textContent = `${job.status} | ${shortId(job.id)} | ${progressText(job)}`;
+    jobSelectEl.appendChild(option);
+  }
+
+  if (!activeJobId || !jobs.has(activeJobId)) {
+    activeJobId = allJobs[0].id;
+  }
+  jobSelectEl.value = activeJobId;
+}
+
+function renderJob(job) {
+  statusEl.textContent = job.status || "idle";
+  wordCountEl.textContent = String(job.progress?.fetchedWords || 0);
+  successCountEl.textContent = String(job.progress?.succeededRecords || 0);
+  failedCountEl.textContent = String(job.progress?.failedRecords || 0);
+  totalCountEl.textContent = String(job.progress?.totalRecords || 0);
+
+  const completed = (job.progress?.succeededRecords || 0) + (job.progress?.failedRecords || 0);
+  const total = job.progress?.totalRecords || 0;
   const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
   progressBarEl.style.width = `${percentage}%`;
 
@@ -122,10 +216,10 @@ function renderWords(words) {
   for (const item of words) {
     const row = document.createElement("tr");
     row.innerHTML = `
-      <td>${escapeHtml(item.wordId || "")}</td>
-      <td>${escapeHtml(item.word || "")}</td>
-      <td>${escapeHtml(item.meaning || "")}</td>
-      <td>${escapeHtml(item.phonetic || "")}</td>
+      <td>${escapeHtml(String(item.wordId || ""))}</td>
+      <td>${escapeHtml(String(item.word || ""))}</td>
+      <td>${escapeHtml(String(item.meaning || ""))}</td>
+      <td>${escapeHtml(String(item.phonetic || ""))}</td>
     `;
     fragment.appendChild(row);
   }
@@ -139,7 +233,23 @@ function resetView() {
   failedCountEl.textContent = "0";
   totalCountEl.textContent = "0";
   progressBarEl.style.width = "0%";
+  logBoxEl.textContent = "等待任务开始...";
   wordTableEl.innerHTML = "";
+}
+
+function isRunning(status) {
+  return status === "queued" || status === "running";
+}
+
+function shortId(id) {
+  return id ? id.slice(0, 8) : "";
+}
+
+function progressText(job) {
+  const progress = job.progress || {};
+  const completed = (progress.succeededRecords || 0) + (progress.failedRecords || 0);
+  const total = progress.totalRecords || 0;
+  return total > 0 ? `${completed}/${total}` : "等待中";
 }
 
 function escapeHtml(value) {
@@ -150,3 +260,5 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 }
+
+loadJobs();

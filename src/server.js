@@ -1,7 +1,7 @@
 const http = require("node:http");
 const fs = require("node:fs/promises");
 const path = require("node:path");
-const { createJob, getJobView, getJob } = require("./services/jobStore");
+const { createJob, getJobView, getJob, listJobViews } = require("./services/jobStore");
 const { runVocabularyJob } = require("./services/runVocabularyJob");
 
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
@@ -36,6 +36,10 @@ function createServer() {
         });
 
         return sendJson(res, 202, { jobId: job.id });
+      }
+
+      if (req.method === "GET" && url.pathname === "/api/jobs") {
+        return sendJson(res, 200, { jobs: listJobViews() });
       }
 
       if (req.method === "GET" && url.pathname.startsWith("/api/jobs/")) {

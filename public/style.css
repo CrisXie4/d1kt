@@ -73,6 +73,7 @@ h2 {
 
 input,
 textarea,
+select,
 button {
   width: 100%;
   border-radius: 12px;
@@ -96,7 +97,13 @@ button {
 
 button:disabled {
   opacity: 0.6;
-  cursor: wait;
+  cursor: not-allowed;
+}
+
+.job-picker {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
 }
 
 .checkbox {

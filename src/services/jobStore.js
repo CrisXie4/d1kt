@@ -46,6 +46,12 @@ function getJobView(id) {
   };
 }
 
+function listJobViews() {
+  return Array.from(jobs.values())
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .map((job) => getJobView(job.id));
+}
+
 function setJobStatus(id, status) {
   const job = getRequiredJob(id);
   job.status = status;
@@ -99,6 +105,7 @@ module.exports = {
   createJob,
   getJob,
   getJobView,
+  listJobViews,
   markCompleted,
   markFailed,
   setJobStatus,
