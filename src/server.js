@@ -111,7 +111,7 @@ function normalizeConfig(body) {
   const baseUrl = ensureString(body.baseUrl, "Base URL").replace(/\/+$/, "");
   const studyPathPrefix = ensureOptionalPath(body.studyPathPrefix, "/api/api/vocabulary/study-words/");
   const attemptPath = ensureOptionalPath(body.attemptPath, "/api/api/vocabulary/test-attempt");
-  const recordPath = ensureOptionalPath(body.recordPath, "/api/api/vocabulary/word-record");
+  const recordPath = ensureOptionalPath(body.recordPath, "/api/api/vocabulary/test-record");
 
   const concurrency = clampNumber(body.concurrency, 1, 256, 48);
   const requestTimeoutMs = clampNumber(body.requestTimeoutMs, 1000, 60000, 15000);

@@ -88,8 +88,11 @@ function normalizeWord(item) {
     ) || "";
 
   return {
+    createdAt: firstString(item.createdAt, item.word?.createdAt),
     meaning,
     phonetic,
+    updatedAt: firstString(item.updatedAt, item.word?.updatedAt),
+    version: typeof item.__v === "number" ? item.__v : item.word?.__v,
     word,
     wordId,
     wordSetId

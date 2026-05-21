@@ -7,7 +7,7 @@ const {
   setJobWords,
   updateProgress
 } = require("./jobStore");
-const { TEST_TYPES, createTestAttempt, fetchStudyWords, submitTestAttemptQuestion } = require("./d1ktClient");
+const { TEST_TYPES, createTestAttempt, fetchStudyWords, saveTestRecord } = require("./d1ktClient");
 const { runPool } = require("./workerPool");
 const { extractWords } = require("../utils/extractWords");
 const { readCache, writeCache } = require("./wordCache");
@@ -61,62 +61,52 @@ async function runVocabularyJob(jobId) {
       appendLog(jobId, `Multiple word sets found; using ${wordSetId}.`);
     }
 
-    const wordById = new Map(words.map((word) => [word.wordId, word]));
-    const attempts = [];
-    for (const testType of TEST_TYPES) {
-      appendLog(jobId, `Creating test attempt for ${testType} with wordSet ${wordSetId}.`);
-      const attempt = await createTestAttempt(job.config, {
-        count: words.length,
-        testType,
-        vocabularyId: wordSetId,
-        wordSet: wordSetId,
-        wordSetId
-      });
-      const questions = Array.isArray(attempt?.questions) ? attempt.questions : [];
-      if (!attempt?.attemptId || questions.length === 0) {
-        throw new Error(`Invalid test-attempt response for ${testType}.`);
-      }
-      attempts.push({
-        attemptId: attempt.attemptId,
-        questions,
-        testType
-      });
-      appendLog(jobId, `Created ${testType} attempt ${attempt.attemptId} with ${questions.length} questions.`);
-    }
-
-    const tasks = attempts.flatMap((attempt) =>
-      attempt.questions.map((question) => ({
-        attemptId: attempt.attemptId,
-        question,
-        testType: attempt.testType,
-        word: wordById.get(question.wordId) || question,
-        wordId: question.wordId
-      }))
-    );
+    const tasks = TEST_TYPES.map((testType) => ({
+      testType,
+      wordSetId,
+      words
+    }));
 
     let succeededRecords = 0;
     let failedRecords = 0;
     let completedRecords = 0;
 
     updateProgress(jobId, { totalRecords: tasks.length });
-    appendLog(jobId, `Dispatching ${tasks.length} test-attempt submit requests with concurrency ${job.config.concurrency}.`);
+    appendLog(jobId, `Dispatching ${tasks.length} test-attempt/test-record flows with concurrency ${job.config.concurrency}.`);
 
     await runPool(tasks, job.config.concurrency, async (task) => {
       try {
-        await submitTestAttemptQuestion(job.config, {
-          attemptId: task.attemptId,
-          isCorrect: true,
-          questionToken: task.question.questionToken,
+        const startTime = new Date();
+        const attempt = await createTestAttempt(job.config, {
           testType: task.testType,
-          vocabularyId: wordSetId,
-          wordId: task.wordId,
-          wordSet: wordSetId,
-          wordSetId
+          vocabularyId: task.wordSetId,
+          wordSet: task.wordSetId,
+          wordSetId: task.wordSetId,
+          words: task.words.map(toAttemptWord)
+        });
+        const questions = Array.isArray(attempt?.questions) ? attempt.questions : [];
+        if (!attempt?.attemptId || questions.length === 0) {
+          throw new Error(`Invalid test-attempt response for ${task.testType}.`);
+        }
+
+        const endTime = new Date();
+        await saveTestRecord(job.config, {
+          attemptId: attempt.attemptId,
+          message: "测试记录已保存",
+          stats: {
+            accuracy: 0,
+            correctWords: questions.length,
+            duration: Math.max(0.1, (endTime.getTime() - startTime.getTime()) / 1000),
+            endTime: endTime.toISOString(),
+            startTime: startTime.toISOString(),
+            totalWords: questions.length
+          },
+          submittedAt: endTime.toISOString()
         });
         succeededRecords += 1;
       } catch (error) {
         failedRecords += 1;
-        appendLog(jobId, `Failed ${task.word.word} / ${task.testType}: ${error.message}`);
+        appendLog(jobId, `Failed ${task.testType}: ${error.message}`);
       } finally {
         completedRecords += 1;
         updateProgress(jobId, {
@@ -141,13 +131,26 @@ async function runVocabularyJob(jobId) {
 
 function normalizeCachedWords(cached) {
   const words = Array.isArray(cached.words) ? cached.words : [];
-  const needsWordSet = words.some((word) => !word.wordSetId);
-  if (!needsWordSet) {
+  const needsRawFields = words.some((word) => !word.wordSetId || !word.createdAt || !word.updatedAt);
+  if (!needsRawFields) {
     return words;
   }
 
   const extracted = extractWords(cached.rawPayload);
   return extracted.length > 0 ? extracted : words;
+}
+
+function toAttemptWord(word) {
+  return {
+    __v: word.version || 0,
+    _id: word.wordId,
+    createdAt: word.createdAt,
+    pronunciation: word.phonetic,
+    translation: word.meaning,
+    updatedAt: word.updatedAt,
+    word: word.word,
+    wordSet: word.wordSetId
+  };
 }
 
 module.exports = {

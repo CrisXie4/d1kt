@@ -41,11 +41,8 @@ async function createTestAttempt(config, payload) {
   });
 }
 
-async function submitTestAttemptQuestion(config, payload) {
-  const path = config.recordPath
-    .replaceAll(":attemptId", encodeURIComponent(payload.attemptId))
-    .replaceAll("{attemptId}", encodeURIComponent(payload.attemptId));
-  const url = new URL(trimLeadingSlash(path), ensureTrailingSlash(config.baseUrl));
+async function saveTestRecord(config, payload) {
+  const url = new URL(trimLeadingSlash(config.recordPath), ensureTrailingSlash(config.baseUrl));
   const body = config.jwtInBody ? { ...payload, jwt: config.jwt } : payload;
 
   return requestJson(url, {
@@ -132,5 +129,5 @@ module.exports = {
   createTestAttempt,
   fetchStudyWords,
   postWordRecord,
-  submitTestAttemptQuestion
+  saveTestRecord
 };
