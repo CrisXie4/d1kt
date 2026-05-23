@@ -34,8 +34,9 @@ function createServer() {
           return sendJson(res, 401, { error: `Login failed: ${error.message}` });
         }
 
+        const owner = loginInput.username;
         const config = { ...jobInput, jwt: auth.token, userId: FORCED_USER_ID };
-        const job = createJob(config);
+        const job = createJob(config, owner);
 
         runVocabularyJob(job.id).catch((error) => {
           const failedJob = getJob(job.id);
@@ -46,16 +47,20 @@ function createServer() {
           }
         });
 
-        return sendJson(res, 202, { jobId: job.id });
+        return sendJson(res, 202, { jobId: job.id }, [
+          `harness_owner=${encodeURIComponent(owner)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400`
+        ]);
       }
 
       if (req.method === "GET" && url.pathname === "/api/jobs") {
-        return sendJson(res, 200, { jobs: listJobViews() });
+        const owner = readOwnerCookie(req);
+        return sendJson(res, 200, { jobs: listJobViews(owner) });
       }
 
       if (req.method === "GET" && url.pathname.startsWith("/api/jobs/")) {
+        const owner = readOwnerCookie(req);
         const jobId = url.pathname.split("/").pop();
-        const job = getJobView(jobId);
+        const job = getJobView(jobId, owner);
         if (!job) {
           return sendJson(res, 404, { error: "Job not found." });
         }
@@ -173,9 +178,31 @@ function createHttpError(statusCode, message) {
   return error;
 }
 
-function sendJson(res, statusCode, payload) {
-  res.writeHead(statusCode, { "content-type": "application/json; charset=utf-8" });
+function sendJson(res, statusCode, payload, setCookies) {
+  const headers = { "content-type": "application/json; charset=utf-8" };
+  if (Array.isArray(setCookies) && setCookies.length > 0) {
+    headers["set-cookie"] = setCookies;
+  }
+  res.writeHead(statusCode, headers);
   res.end(JSON.stringify(payload));
+}
+
+function readOwnerCookie(req) {
+  const header = req.headers.cookie;
+  if (!header) return null;
+  for (const part of header.split(";")) {
+    const eq = part.indexOf("=");
+    if (eq === -1) continue;
+    const name = part.slice(0, eq).trim();
+    if (name === "harness_owner") {
+      try {
+        return decodeURIComponent(part.slice(eq + 1).trim()) || null;
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
 }
 
 module.exports = {

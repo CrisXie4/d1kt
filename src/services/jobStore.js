@@ -1,10 +1,14 @@
 const { randomUUID } = require("node:crypto");
 
+const CLEANUP_INTERVAL_MS = 60 * 1000;
+const CLEANUP_AFTER_FINISHED_MS = 30 * 60 * 1000;
+
 const jobs = new Map();
 
-function createJob(config) {
+function createJob(config, owner) {
   const job = {
     id: randomUUID(),
+    owner: owner || null,
     config,
     createdAt: new Date().toISOString(),
     error: null,
@@ -28,9 +32,12 @@ function getJob(id) {
   return jobs.get(id) || null;
 }
 
-function getJobView(id) {
+function getJobView(id, owner) {
   const job = jobs.get(id);
   if (!job) {
+    return null;
+  }
+  if (owner && job.owner && job.owner !== owner) {
     return null;
   }
 
@@ -46,10 +53,11 @@ function getJobView(id) {
   };
 }
 
-function listJobViews() {
+function listJobViews(owner) {
   return Array.from(jobs.values())
+    .filter((job) => !owner || !job.owner || job.owner === owner)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .map((job) => getJobView(job.id));
+    .map((job) => getJobView(job.id, owner));
 }
 
 function setJobStatus(id, status) {
@@ -102,6 +110,19 @@ function getRequiredJob(id) {
   return job;
 }
 
+function sweepFinishedJobs(now = Date.now()) {
+  for (const [id, job] of jobs) {
+    if (!job.finishedAt) continue;
+    const finishedMs = Date.parse(job.finishedAt);
+    if (Number.isFinite(finishedMs) && now - finishedMs >= CLEANUP_AFTER_FINISHED_MS) {
+      jobs.delete(id);
+    }
+  }
+}
+
+const cleanupTimer = setInterval(sweepFinishedJobs, CLEANUP_INTERVAL_MS);
+if (typeof cleanupTimer.unref === "function") cleanupTimer.unref();
+
 module.exports = {
   appendLog,
   createJob,
@@ -112,5 +133,6 @@ module.exports = {
   markFailed,
   setJobStatus,
   setJobWords,
+  sweepFinishedJobs,
   updateProgress
 };

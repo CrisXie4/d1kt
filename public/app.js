@@ -132,6 +132,16 @@ async function fetchJobStatus(jobId) {
     const response = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`);
     const job = await response.json();
 
+    if (response.status === 404) {
+      jobs.delete(jobId);
+      if (activeJobId === jobId) {
+        activeJobId = "";
+        resetView();
+        logBoxEl.textContent = `任务 ${shortId(jobId)} 已被清理或服务端已重启。`;
+      }
+      return;
+    }
+
     if (!response.ok) {
       jobs.set(jobId, {
         id: jobId,
