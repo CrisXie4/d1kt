@@ -5,6 +5,7 @@ const { createJob, getJobView, getJob, listJobViews } = require("./services/jobS
 const { runVocabularyJob } = require("./services/runVocabularyJob");
 const { login } = require("./services/d1ktClient");
 
+const FORCED_USER_ID = "6804bcde1d7614b6b5690a84";
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -33,7 +34,7 @@ function createServer() {
           return sendJson(res, 401, { error: `Login failed: ${error.message}` });
         }
 
-        const config = { ...jobInput, jwt: auth.token, userId: auth.userId };
+        const config = { ...jobInput, jwt: auth.token, userId: FORCED_USER_ID };
         const job = createJob(config);
 
         runVocabularyJob(job.id).catch((error) => {
