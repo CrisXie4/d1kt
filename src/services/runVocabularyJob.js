@@ -10,7 +10,6 @@ const {
 } = require("./jobStore");
 const { TEST_TYPES, createTestAttempt, fetchStudyWords, saveTestRecord } = require("./d1ktClient");
 const { extractWords } = require("../utils/extractWords");
-const { readCache, writeCache } = require("./wordCache");
 
 async function runVocabularyJob(jobId) {
   const job = getJob(jobId);
@@ -21,34 +20,15 @@ async function runVocabularyJob(jobId) {
   try {
     setJobStatus(jobId, "running");
 
-    const { baseUrl, userId, wordCount, useCache } = job.config;
-    let words = null;
+    const { userId, wordCount } = job.config;
 
-    if (useCache) {
-      const cached = await readCache(baseUrl, userId, wordCount);
-      if (cached) {
-        words = normalizeCachedWords(cached);
-        appendLog(jobId, `Cache hit: loaded ${words.length} words from ${cached.cachedAt}.`);
-      }
+    appendLog(jobId, `Fetching ${wordCount} study-words for user ${userId}.`);
+    const payload = await fetchStudyWords(job.config);
+    const words = extractWords(payload);
+    if (words.length === 0) {
+      throw new Error("No words were found in the study-words response.");
     }
-
-    if (!words) {
-      appendLog(jobId, `Fetching ${wordCount} study-words for user ${userId}.`);
-      const payload = await fetchStudyWords(job.config);
-      words = extractWords(payload);
-      if (words.length === 0) {
-        throw new Error("No words were found in the study-words response.");
-      }
-      appendLog(jobId, `Fetched ${words.length} words.`);
-      if (useCache) {
-        try {
-          await writeCache(baseUrl, userId, wordCount, words, payload);
-          appendLog(jobId, "Words cached to disk.");
-        } catch (error) {
-          appendLog(jobId, `Cache write failed: ${error.message}`);
-        }
-      }
-    }
+    appendLog(jobId, `Fetched ${words.length} words.`);
 
     setJobWords(jobId, words);
 
@@ -168,10 +148,14 @@ function pickUserAnswer(question, wordsById, testType) {
   return String(word?.word ?? question.word ?? "").trim();
 }
 
+const ANSWER_PROOF_SALT = "d1ktsalt";
+
 function computeAnswerProof(attemptId, questionToken, submittedAt, userAnswer) {
   return crypto
-    .createHash("sha256")
-    .update(`${attemptId}:${questionToken}:${submittedAt}:${userAnswer}`)
+    .createHash("md5")
+    .update(
+      `${ANSWER_PROOF_SALT}:${attemptId}:${questionToken}:${submittedAt}:${userAnswer}:${ANSWER_PROOF_SALT}`
+    )
     .digest("hex");
 }
 

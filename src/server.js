@@ -107,7 +107,6 @@ async function readJsonBody(req) {
 function normalizeConfig(body) {
   const jwt = ensureString(body.jwt, "JWT");
   const userId = ensureString(body.userId ?? body.vocabularyId, "User ID");
-  const connectSid = ensureString(body.connectSid, "connect.sid");
   const baseUrl = ensureString(body.baseUrl, "Base URL").replace(/\/+$/, "");
   const studyPathPrefix = ensureOptionalPath(body.studyPathPrefix, "/api/api/vocabulary/study-words/");
   const attemptPath = ensureOptionalPath(body.attemptPath, "/api/api/vocabulary/test-attempt");
@@ -115,20 +114,15 @@ function normalizeConfig(body) {
 
   const requestTimeoutMs = clampNumber(body.requestTimeoutMs, 1000, 60000, 15000);
   const wordCount = clampNumber(body.wordCount, 1, 500, 100);
-  const jwtInBody = Boolean(body.jwtInBody);
-  const useCache = body.useCache === undefined ? true : Boolean(body.useCache);
 
   return {
     baseUrl,
     attemptPath,
-    connectSid,
     jwt,
     jwtCookieName: "token",
-    jwtInBody,
     recordPath,
     requestTimeoutMs,
     studyPathPrefix,
-    useCache,
     userId,
     wordCount
   };

@@ -24,13 +24,10 @@ form.addEventListener("submit", async (event) => {
     const payload = {
       baseUrl: document.getElementById("baseUrl").value.trim(),
       attemptPath: document.getElementById("attemptPath").value.trim(),
-      connectSid: document.getElementById("connectSid").value.trim(),
       jwt: document.getElementById("jwt").value.trim(),
-      jwtInBody: document.getElementById("jwtInBody").checked,
       recordPath: document.getElementById("recordPath").value.trim(),
       requestTimeoutMs: Number.parseInt(document.getElementById("requestTimeoutMs").value, 10),
       studyPathPrefix: document.getElementById("studyPathPrefix").value.trim(),
-      useCache: document.getElementById("useCache").checked,
       userId: document.getElementById("userId").value.trim(),
       wordCount: Number.parseInt(document.getElementById("wordCount").value, 10)
     };

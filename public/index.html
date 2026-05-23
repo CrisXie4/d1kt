@@ -41,10 +41,6 @@
             <span>JWT</span>
             <textarea id="jwt" name="jwt" rows="4" placeholder="输入 JWT" required></textarea>
           </label>
-          <label>
-            <span>connect.sid</span>
-            <textarea id="connectSid" name="connectSid" rows="3" placeholder="输入 connect.sid" required></textarea>
-          </label>
 
           <div class="grid">
             <label>
@@ -52,16 +48,6 @@
               <input id="requestTimeoutMs" name="requestTimeoutMs" type="number" min="1000" max="60000" value="15000">
             </label>
           </div>
-
-          <label class="checkbox">
-            <input id="useCache" name="useCache" type="checkbox" checked>
-            <span>缓存已获取的单词（按用户 ID + count 存本地磁盘）</span>
-          </label>
-
-          <label class="checkbox">
-            <input id="jwtInBody" name="jwtInBody" type="checkbox">
-            <span>POST 请求时额外把 JWT 放进 JSON body</span>
-          </label>
 
           <button id="submitButton" type="submit">开始测试</button>
         </form>

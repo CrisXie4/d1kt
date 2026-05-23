@@ -19,10 +19,9 @@ async function fetchStudyWords(config) {
 
 async function postWordRecord(config, payload) {
   const url = new URL(trimLeadingSlash(config.recordPath), ensureTrailingSlash(config.baseUrl));
-  const body = config.jwtInBody ? { ...payload, jwt: config.jwt } : payload;
 
   return requestJson(url, {
-    body: JSON.stringify(body),
+    body: JSON.stringify({ ...payload, jwt: config.jwt }),
     headers: buildHeaders(config),
     method: "POST",
     timeoutMs: config.requestTimeoutMs
@@ -31,10 +30,9 @@ async function postWordRecord(config, payload) {
 
 async function createTestAttempt(config, payload) {
   const url = new URL(trimLeadingSlash(config.attemptPath), ensureTrailingSlash(config.baseUrl));
-  const body = config.jwtInBody ? { ...payload, jwt: config.jwt } : payload;
 
   return requestJson(url, {
-    body: JSON.stringify(body),
+    body: JSON.stringify({ ...payload, jwt: config.jwt }),
     headers: buildHeaders(config),
     method: "POST",
     timeoutMs: config.requestTimeoutMs
@@ -43,10 +41,9 @@ async function createTestAttempt(config, payload) {
 
 async function saveTestRecord(config, payload) {
   const url = new URL(trimLeadingSlash(config.recordPath), ensureTrailingSlash(config.baseUrl));
-  const body = config.jwtInBody ? { ...payload, jwt: config.jwt } : payload;
 
   return requestJson(url, {
-    body: JSON.stringify(body),
+    body: JSON.stringify({ ...payload, jwt: config.jwt }),
     headers: buildHeaders(config),
     method: "POST",
     timeoutMs: config.requestTimeoutMs
@@ -59,7 +56,7 @@ function buildHeaders(config) {
     authorization: `Bearer ${config.jwt}`,
     connection: "keep-alive",
     "content-type": "application/json",
-    cookie: `${config.jwtCookieName}=${encodeURIComponent(config.jwt)}; connect.sid=${encodeURIComponent(config.connectSid)}`,
+    cookie: `${config.jwtCookieName}=${encodeURIComponent(config.jwt)}`,
     "user-agent": "d1kt-node-harness/1.0"
   };
 }

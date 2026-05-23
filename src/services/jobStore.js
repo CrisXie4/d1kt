@@ -73,10 +73,12 @@ function updateProgress(id, patch) {
 
 function appendLog(id, message) {
   const job = getRequiredJob(id);
-  job.logs.push(`[${new Date().toISOString()}] ${message}`);
+  const line = `[${new Date().toISOString()}] ${message}`;
+  job.logs.push(line);
   if (job.logs.length > 200) {
     job.logs = job.logs.slice(-200);
   }
+  console.log(`[job ${id.slice(0, 8)}] ${line}`);
 }
 
 function markCompleted(id) {
