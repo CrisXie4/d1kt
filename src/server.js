@@ -3,6 +3,7 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const { createJob, getJobView, getJob, listJobViews } = require("./services/jobStore");
 const { runVocabularyJob } = require("./services/runVocabularyJob");
+const { login } = require("./services/d1ktClient");
 
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
 const MIME_TYPES = {
@@ -23,7 +24,16 @@ function createServer() {
 
       if (req.method === "POST" && url.pathname === "/api/jobs") {
         const body = await readJsonBody(req);
-        const config = normalizeConfig(body);
+        const { loginInput, jobInput } = normalizeJobRequest(body);
+
+        let auth;
+        try {
+          auth = await login(loginInput);
+        } catch (error) {
+          return sendJson(res, 401, { error: `Login failed: ${error.message}` });
+        }
+
+        const config = { ...jobInput, jwt: auth.token, userId: auth.userId };
         const job = createJob(config);
 
         runVocabularyJob(job.id).catch((error) => {
@@ -104,10 +114,11 @@ async function readJsonBody(req) {
   }
 }
 
-function normalizeConfig(body) {
-  const jwt = ensureString(body.jwt, "JWT");
-  const userId = ensureString(body.userId ?? body.vocabularyId, "User ID");
+function normalizeJobRequest(body) {
+  const username = ensureString(body.username, "Username");
+  const password = ensureString(body.password, "Password");
   const baseUrl = ensureString(body.baseUrl, "Base URL").replace(/\/+$/, "");
+  const loginPath = ensureOptionalPath(body.loginPath, "/api/api/auth/login");
   const studyPathPrefix = ensureOptionalPath(body.studyPathPrefix, "/api/api/vocabulary/study-words/");
   const attemptPath = ensureOptionalPath(body.attemptPath, "/api/api/vocabulary/test-attempt");
   const recordPath = ensureOptionalPath(body.recordPath, "/api/api/vocabulary/test-record");
@@ -116,15 +127,16 @@ function normalizeConfig(body) {
   const wordCount = clampNumber(body.wordCount, 1, 500, 100);
 
   return {
-    baseUrl,
-    attemptPath,
-    jwt,
-    jwtCookieName: "token",
-    recordPath,
-    requestTimeoutMs,
-    studyPathPrefix,
-    userId,
-    wordCount
+    loginInput: { baseUrl, loginPath, username, password, requestTimeoutMs },
+    jobInput: {
+      baseUrl,
+      attemptPath,
+      jwtCookieName: "token",
+      recordPath,
+      requestTimeoutMs,
+      studyPathPrefix,
+      wordCount
+    }
   };
 }
 

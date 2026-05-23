@@ -4,6 +4,28 @@ const TEST_TYPES = [
   "multiple-choice"
 ];
 
+async function login({ baseUrl, loginPath, username, password, requestTimeoutMs }) {
+  const url = new URL(trimLeadingSlash(loginPath), ensureTrailingSlash(baseUrl));
+
+  const payload = await requestJson(url, {
+    body: JSON.stringify({ username, password }),
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      "user-agent": "d1kt-node-harness/1.0"
+    },
+    method: "POST",
+    timeoutMs: requestTimeoutMs
+  });
+
+  const token = payload && typeof payload.token === "string" ? payload.token.trim() : "";
+  const userId = payload && payload.user && (payload.user._id || payload.user.id);
+  if (!token || !userId) {
+    throw new Error("Login response missing token or user._id.");
+  }
+  return { token, userId: String(userId) };
+}
+
 async function fetchStudyWords(config) {
   const base = ensureTrailingSlash(config.baseUrl);
   const prefix = trimSlashes(config.studyPathPrefix);
@@ -125,6 +147,7 @@ module.exports = {
   TEST_TYPES,
   createTestAttempt,
   fetchStudyWords,
+  login,
   postWordRecord,
   saveTestRecord
 };

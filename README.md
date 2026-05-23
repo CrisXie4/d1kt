@@ -6,7 +6,7 @@
 
 ## 功能
 
-- 浏览器表单录入 JWT、用户 ID、单词数量等参数
+- 浏览器表单录入账号 / 密码，后端代为登录拿到 JWT 和用户 ID
 - 后端串起 study-words → 三个独立的 test-attempt / test-record 流程
 - 每道题的提交时间随机化，更贴近真人作答节奏
 - `answerProof` 按 d1kt 当前前端公式生成：`md5("d1ktsalt" + ":" + attemptId + ":" + questionToken + ":" + submittedAt + ":" + userAnswer + ":" + "d1ktsalt")`
@@ -36,12 +36,12 @@ PORT=4000 npm start
 | study-words 路径 | `/api/api/vocabulary/study-words/` | 拉取单词的接口前缀，会拼上用户 ID |
 | test-attempt 路径 | `/api/api/vocabulary/test-attempt` | 创建一次测试的接口 |
 | 提交结果路径 | `/api/api/vocabulary/test-record` | 提交答题结果的接口 |
-| 用户 ID | — | 在 d1kt 个人页面里的 ID |
+| 账号 | — | d1kt 登录账号 |
+| 密码 | — | d1kt 登录密码 |
 | 单词数量 | `100` | 1–500 |
-| JWT | — | 登录后从浏览器 Cookie / localStorage 里拿到的 token |
 | 超时 (ms) | `15000` | 单个请求超时时间 |
 
-> JWT 同时通过 `Authorization: Bearer`、`Cookie: token=...` 以及 JSON body 的 `jwt` 字段一起发送，这是 d1kt 当前接口要求的方式。
+> 后端会向 `/api/api/auth/login` 发送 `{ username, password }`，从响应里取出 `token` 当 JWT、`user._id` 当用户 ID；之后所有 d1kt 请求都通过 `Authorization: Bearer`、`Cookie: token=...` 以及 JSON body 的 `jwt` 字段一起发送。
 
 ## 项目结构
 
@@ -63,4 +63,4 @@ public/
 
 ## 凭据失效
 
-JWT 过期后所有接口会 401，重新在 d1kt 网页登录拿新的 token 填进表单即可。
+服务端拿到的 JWT 默认 1 天有效期，过期后所有接口会 401。当前实现是「每次创建任务都重新登录拿一次新 token」，所以只要账号密码没变就不用管。
