@@ -110,26 +110,21 @@ async function runTestType({ job, jobId, progress, testType, words, wordSetId })
       `[${testType}] answered ${answers.length} questions over ${((lastSubmittedAt - attemptStartedAt) / 1000).toFixed(1)}s`
     );
 
-    // Check if we should use the new test-answer endpoint with interactions
-    if (job.config.answerPath) {
-      // Submit each answer individually with interaction tracking
-      for (const answer of answers) {
-        const interactions = generateInteractions(answer.userAnswer, answer.submittedAt);
-        await submitTestAnswer(job.config, {
-          attemptId: attempt.attemptId,
-          questionToken: answer.questionToken,
-          userAnswer: answer.userAnswer,
-          submittedAt: answer.submittedAt,
-          answerProof: answer.answerProof,
-          interactions
-        });
-      }
-    } else {
-      // Use the legacy batch endpoint - only send attemptId
-      await saveTestRecord(job.config, {
-        attemptId: attempt.attemptId
+    for (const answer of answers) {
+      const interactions = generateInteractions(answer.userAnswer, answer.submittedAt);
+      await submitTestAnswer(job.config, {
+        attemptId: attempt.attemptId,
+        questionToken: answer.questionToken,
+        userAnswer: answer.userAnswer,
+        submittedAt: answer.submittedAt,
+        answerProof: answer.answerProof,
+        interactions
       });
     }
+
+    await saveTestRecord(job.config, {
+      attemptId: attempt.attemptId
+    });
     progress.succeeded += 1;
   } catch (error) {
     progress.failed += 1;
