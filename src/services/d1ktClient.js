@@ -72,6 +72,17 @@ async function saveTestRecord(config, payload) {
   });
 }
 
+async function submitTestAnswer(config, payload) {
+  const url = new URL(trimLeadingSlash(config.answerPath || "/api/api/vocabulary/test-answer"), ensureTrailingSlash(config.baseUrl));
+
+  return requestJson(url, {
+    body: JSON.stringify({ ...payload, jwt: config.jwt }),
+    headers: buildHeaders(config),
+    method: "POST",
+    timeoutMs: config.requestTimeoutMs
+  });
+}
+
 function buildHeaders(config) {
   return {
     accept: "application/json",
@@ -149,5 +160,6 @@ module.exports = {
   fetchStudyWords,
   login,
   postWordRecord,
-  saveTestRecord
+  saveTestRecord,
+  submitTestAnswer
 };

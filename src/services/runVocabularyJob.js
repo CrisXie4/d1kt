@@ -8,7 +8,7 @@ const {
   setJobWords,
   updateProgress
 } = require("./jobStore");
-const { TEST_TYPES, createTestAttempt, fetchStudyWords, saveTestRecord } = require("./d1ktClient");
+const { TEST_TYPES, createTestAttempt, fetchStudyWords, saveTestRecord, submitTestAnswer } = require("./d1ktClient");
 const { extractWords } = require("../utils/extractWords");
 
 async function runVocabularyJob(jobId) {
@@ -110,10 +110,27 @@ async function runTestType({ job, jobId, progress, testType, words, wordSetId })
       `[${testType}] answered ${answers.length} questions over ${((lastSubmittedAt - attemptStartedAt) / 1000).toFixed(1)}s`
     );
 
-    await saveTestRecord(job.config, {
-      attemptId: attempt.attemptId,
-      answers
-    });
+    // Check if we should use the new test-answer endpoint with interactions
+    if (job.config.answerPath) {
+      // Submit each answer individually with interaction tracking
+      for (const answer of answers) {
+        const interactions = generateInteractions(answer.userAnswer, answer.submittedAt);
+        await submitTestAnswer(job.config, {
+          attemptId: attempt.attemptId,
+          questionToken: answer.questionToken,
+          userAnswer: answer.userAnswer,
+          submittedAt: answer.submittedAt,
+          answerProof: answer.answerProof,
+          interactions
+        });
+      }
+    } else {
+      // Use the legacy batch endpoint
+      await saveTestRecord(job.config, {
+        attemptId: attempt.attemptId,
+        answers
+      });
+    }
     progress.succeeded += 1;
   } catch (error) {
     progress.failed += 1;
@@ -157,6 +174,46 @@ function computeAnswerProof(attemptId, questionToken, submittedAt, userAnswer) {
       `${ANSWER_PROOF_SALT}:${attemptId}:${questionToken}:${submittedAt}:${userAnswer}:${ANSWER_PROOF_SALT}`
     )
     .digest("hex");
+}
+
+function generateInteractions(userAnswer, submittedAt) {
+  const interactions = [];
+  const chars = userAnswer.split("");
+  let ts = submittedAt - (chars.length * 100 + randomInt(100, 300)); // Start typing slightly before submission
+
+  // Question shown event
+  interactions.push({
+    type: "question-shown",
+    ts: ts - randomInt(100, 500)
+  });
+
+  // Generate keydown and input events for each character
+  for (let i = 0; i < chars.length; i++) {
+    const char = chars[i];
+    const keydownTs = ts + i * randomInt(50, 150);
+    const inputTs = keydownTs + randomInt(1, 5);
+
+    interactions.push({
+      type: "keydown",
+      key: char,
+      value: userAnswer.slice(0, i),
+      valueLength: i,
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      ts: keydownTs
+    });
+
+    interactions.push({
+      type: "input",
+      inputType: "insertText",
+      value: userAnswer.slice(0, i + 1),
+      valueLength: i + 1,
+      ts: inputTs
+    });
+  }
+
+  return interactions;
 }
 
 function sleep(ms) {

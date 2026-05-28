@@ -128,6 +128,7 @@ function normalizeJobRequest(body) {
   const studyPathPrefix = ensureOptionalPath(body.studyPathPrefix, "/api/api/vocabulary/study-words/");
   const attemptPath = ensureOptionalPath(body.attemptPath, "/api/api/vocabulary/test-attempt");
   const recordPath = ensureOptionalPath(body.recordPath, "/api/api/vocabulary/test-record");
+  const answerPath = body.answerPath ? ensureOptionalPath(body.answerPath, "/api/api/vocabulary/test-answer") : null;
 
   const requestTimeoutMs = clampNumber(body.requestTimeoutMs, 1000, 60000, 15000);
   const wordCount = clampNumber(body.wordCount, 1, 500, 100);
@@ -136,6 +137,7 @@ function normalizeJobRequest(body) {
     loginInput: { baseUrl, loginPath, username, password, requestTimeoutMs },
     jobInput: {
       baseUrl,
+      answerPath,
       attemptPath,
       jwtCookieName: "token",
       recordPath,
