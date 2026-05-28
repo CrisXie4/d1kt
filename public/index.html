@@ -10,7 +10,7 @@
     <main class="layout">
       <section class="panel">
         <h1>D1KT 测试面板</h1>
-        <p class="muted">填入账号密码即可，后端会先登录拿 JWT 再跑测试。</p>
+        <p class="muted">输入 connect.sid 和 token 即可，后端会直接使用提供的凭证运行测试。</p>
 
         <form id="job-form" class="form">
           <label>
@@ -30,12 +30,12 @@
             <input id="recordPath" name="recordPath" value="/api/api/vocabulary/test-record" required>
           </label>
           <label>
-            <span>账号</span>
-            <input id="username" name="username" placeholder="d1kt 账号" required autocomplete="username">
+            <span>connect.sid</span>
+            <input id="connectSid" name="connectSid" placeholder="输入 connect.sid" required>
           </label>
           <label>
-            <span>密码</span>
-            <input id="password" name="password" type="password" placeholder="d1kt 密码" required autocomplete="current-password">
+            <span>token</span>
+            <input id="token" name="token" placeholder="输入 token" required>
           </label>
           <label>
             <span>单词数量 (count)</span>

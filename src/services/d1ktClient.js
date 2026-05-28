@@ -84,12 +84,20 @@ async function submitTestAnswer(config, payload) {
 }
 
 function buildHeaders(config) {
+  const cookies = [];
+  if (config.jwtCookieName && config.jwt) {
+    cookies.push(`${config.jwtCookieName}=${encodeURIComponent(config.jwt)}`);
+  }
+  if (config.connectSid) {
+    cookies.push(`connect.sid=${encodeURIComponent(config.connectSid)}`);
+  }
+
   return {
     accept: "application/json",
     authorization: `Bearer ${config.jwt}`,
     connection: "keep-alive",
     "content-type": "application/json",
-    cookie: `${config.jwtCookieName}=${encodeURIComponent(config.jwt)}`,
+    cookie: cookies.join("; "),
     "user-agent": "d1kt-node-harness/1.0"
   };
 }
@@ -158,7 +166,6 @@ module.exports = {
   TEST_TYPES,
   createTestAttempt,
   fetchStudyWords,
-  login,
   postWordRecord,
   saveTestRecord,
   submitTestAnswer

@@ -24,11 +24,11 @@ form.addEventListener("submit", async (event) => {
     const payload = {
       baseUrl: document.getElementById("baseUrl").value.trim(),
       attemptPath: document.getElementById("attemptPath").value.trim(),
-      password: document.getElementById("password").value,
+      connectSid: document.getElementById("connectSid").value.trim(),
       recordPath: document.getElementById("recordPath").value.trim(),
       requestTimeoutMs: Number.parseInt(document.getElementById("requestTimeoutMs").value, 10),
       studyPathPrefix: document.getElementById("studyPathPrefix").value.trim(),
-      username: document.getElementById("username").value.trim(),
+      token: document.getElementById("token").value.trim(),
       wordCount: Number.parseInt(document.getElementById("wordCount").value, 10)
     };
 

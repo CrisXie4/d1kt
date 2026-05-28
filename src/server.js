@@ -3,7 +3,6 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const { createJob, getJobView, getJob, listJobViews } = require("./services/jobStore");
 const { runVocabularyJob } = require("./services/runVocabularyJob");
-const { login } = require("./services/d1ktClient");
 
 const FORCED_USER_ID = "6804bcde1d7614b6b5690a84";
 const PUBLIC_DIR = path.join(__dirname, "..", "public");
@@ -25,17 +24,14 @@ function createServer() {
 
       if (req.method === "POST" && url.pathname === "/api/jobs") {
         const body = await readJsonBody(req);
-        const { loginInput, jobInput } = normalizeJobRequest(body);
+        const { jobInput, connectSid, token } = normalizeJobRequest(body);
 
-        let auth;
-        try {
-          auth = await login(loginInput);
-        } catch (error) {
-          return sendJson(res, 401, { error: `Login failed: ${error.message}` });
+        if (!token) {
+          return sendJson(res, 400, { error: "Token is required." });
         }
 
-        const owner = loginInput.username;
-        const config = { ...jobInput, jwt: auth.token, userId: FORCED_USER_ID };
+        const owner = connectSid || "user";
+        const config = { ...jobInput, jwt: token, connectSid, userId: FORCED_USER_ID };
         const job = createJob(config, owner);
 
         runVocabularyJob(job.id).catch((error) => {
@@ -121,10 +117,9 @@ async function readJsonBody(req) {
 }
 
 function normalizeJobRequest(body) {
-  const username = ensureString(body.username, "Username");
-  const password = ensureString(body.password, "Password");
+  const connectSid = ensureString(body.connectSid, "connect.sid");
+  const token = ensureString(body.token, "Token");
   const baseUrl = ensureString(body.baseUrl, "Base URL").replace(/\/+$/, "");
-  const loginPath = ensureOptionalPath(body.loginPath, "/api/api/auth/login");
   const studyPathPrefix = ensureOptionalPath(body.studyPathPrefix, "/api/api/vocabulary/study-words/");
   const attemptPath = ensureOptionalPath(body.attemptPath, "/api/api/vocabulary/test-attempt");
   const recordPath = ensureOptionalPath(body.recordPath, "/api/api/vocabulary/test-record");
@@ -134,7 +129,8 @@ function normalizeJobRequest(body) {
   const wordCount = clampNumber(body.wordCount, 1, 500, 100);
 
   return {
-    loginInput: { baseUrl, loginPath, username, password, requestTimeoutMs },
+    connectSid,
+    token,
     jobInput: {
       baseUrl,
       answerPath,
