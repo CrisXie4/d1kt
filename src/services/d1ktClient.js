@@ -65,7 +65,7 @@ async function saveTestRecord(config, payload) {
   const url = new URL(trimLeadingSlash(config.recordPath), ensureTrailingSlash(config.baseUrl));
 
   return requestJson(url, {
-    body: JSON.stringify({ ...payload, jwt: config.jwt }),
+    body: JSON.stringify(payload),
     headers: buildHeaders(config),
     method: "POST",
     timeoutMs: config.requestTimeoutMs
