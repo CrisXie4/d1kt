@@ -125,10 +125,9 @@ async function runTestType({ job, jobId, progress, testType, words, wordSetId })
         });
       }
     } else {
-      // Use the legacy batch endpoint
+      // Use the legacy batch endpoint - only send attemptId
       await saveTestRecord(job.config, {
-        attemptId: attempt.attemptId,
-        answers
+        attemptId: attempt.attemptId
       });
     }
     progress.succeeded += 1;
