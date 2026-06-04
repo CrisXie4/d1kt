@@ -68,7 +68,6 @@ async function runTestType({ job, jobId, progress, testType, words, wordSetId })
   const wordsById = new Map(words.map((word) => [word.wordId, word]));
 
   try {
-    const attemptStartedAt = Date.now();
     const attempt = await createTestAttempt(job.config, {
       wordSetId,
       testType,
@@ -79,48 +78,46 @@ async function runTestType({ job, jobId, progress, testType, words, wordSetId })
       throw new Error(`Invalid test-attempt response for ${testType}.`);
     }
 
-    const initialDelayMs = randomInt(3000, 6000);
-    let cursorMs = attemptStartedAt + initialDelayMs;
-    const answers = questions.map((question) => {
-      cursorMs += randomInt(700, 1500);
-      const submittedAt = cursorMs;
+    // Load the test page and read the instructions before the first question.
+    await sleep(randomInt(2500, 5000));
+
+    const startedAt = Date.now();
+    for (const question of questions) {
+      // Transition to this question (advance the card / brief glance).
+      await sleep(randomInt(300, 1000));
+
       const userAnswer = pickUserAnswer(question, wordsById, testType);
+      const shownAt = Date.now();
+      const { interactions, submittedAt } = buildAnswerTimeline(userAnswer, shownAt);
+
+      // Live through the typing window so submittedAt lands at the real send
+      // time — keeping the request's arrival close to its claimed timestamp.
+      const waitMs = submittedAt - Date.now();
+      if (waitMs > 0) {
+        await sleep(waitMs);
+      }
+
       const answerProof = computeAnswerProof(
         attempt.attemptId,
         question.questionToken,
         submittedAt,
         userAnswer
       );
-      return {
+
+      await submitTestAnswer(job.config, {
+        attemptId: attempt.attemptId,
         questionToken: question.questionToken,
         userAnswer,
         submittedAt,
-        answerProof
-      };
-    });
-
-    const lastSubmittedAt = answers[answers.length - 1].submittedAt;
-    const waitMs = lastSubmittedAt - Date.now() + 500;
-    if (waitMs > 0) {
-      await sleep(waitMs);
+        answerProof,
+        interactions
+      });
     }
 
     appendLog(
       jobId,
-      `[${testType}] answered ${answers.length} questions over ${((lastSubmittedAt - attemptStartedAt) / 1000).toFixed(1)}s`
+      `[${testType}] answered ${questions.length} questions over ${((Date.now() - startedAt) / 1000).toFixed(1)}s`
     );
-
-    for (const answer of answers) {
-      const interactions = generateInteractions(answer.userAnswer, answer.submittedAt);
-      await submitTestAnswer(job.config, {
-        attemptId: attempt.attemptId,
-        questionToken: answer.questionToken,
-        userAnswer: answer.userAnswer,
-        submittedAt: answer.submittedAt,
-        answerProof: answer.answerProof,
-        interactions
-      });
-    }
 
     await saveTestRecord(job.config, {
       attemptId: attempt.attemptId
@@ -170,44 +167,65 @@ function computeAnswerProof(attemptId, questionToken, submittedAt, userAnswer) {
     .digest("hex");
 }
 
-function generateInteractions(userAnswer, submittedAt) {
+// Build a realistic interaction timeline for one answer, mirroring the events a
+// real browser session emits: a question-shown marker, an optional look-away
+// (blur) / return (focus) while the user thinks, then a keydown + input pair per
+// character. Returns the interactions together with the submittedAt they lead up
+// to, so the answerProof can be derived from a timestamp that is consistent with
+// the events. Gaps are tuned to a captured sample (keystrokes ~110-360ms apart,
+// input firing 0-3ms after keydown, submit ~150-500ms after the last keystroke).
+function buildAnswerTimeline(userAnswer, shownAt) {
   const interactions = [];
   const chars = userAnswer.split("");
-  let ts = submittedAt - (chars.length * 100 + randomInt(100, 300)); // Start typing slightly before submission
+  let cursor = shownAt;
 
-  // Question shown event
-  interactions.push({
-    type: "question-shown",
-    ts: ts - randomInt(100, 500)
-  });
+  interactions.push({ type: "question-shown", ts: Math.round(cursor) });
 
-  // Generate keydown and input events for each character
+  // Not every answer looks away — only some sessions blur/focus before typing.
+  if (Math.random() < 0.35) {
+    cursor += randomInt(400, 1200);
+    interactions.push({ type: "blur", valueLength: 0, ts: Math.round(cursor) });
+    cursor += randomInt(1500, 6000);
+    interactions.push({ type: "focus", valueLength: 0, ts: Math.round(cursor) });
+    cursor += randomInt(400, 1200);
+  } else {
+    // Read the prompt and recall the word.
+    cursor += randomInt(700, 2600);
+  }
+
   for (let i = 0; i < chars.length; i++) {
-    const char = chars[i];
-    const keydownTs = ts + i * randomInt(50, 150);
-    const inputTs = keydownTs + randomInt(1, 5);
+    if (i > 0) {
+      // Inter-keystroke gap, with the occasional longer hesitation.
+      cursor += Math.random() < 0.12 ? randomInt(450, 1100) : randomInt(110, 360);
+    }
 
+    // keydown reflects the field value *before* this character is inserted.
     interactions.push({
       type: "keydown",
-      key: char,
+      key: chars[i],
       value: userAnswer.slice(0, i),
       valueLength: i,
       ctrlKey: false,
       metaKey: false,
       altKey: false,
-      ts: keydownTs
+      ts: Math.round(cursor)
     });
 
+    // input fires a hair after the keydown, with the value *after* insertion.
+    cursor += randomInt(0, 3);
     interactions.push({
       type: "input",
       inputType: "insertText",
       value: userAnswer.slice(0, i + 1),
       valueLength: i + 1,
-      ts: inputTs
+      ts: Math.round(cursor)
     });
   }
 
-  return interactions;
+  // Pause between the last keystroke and pressing submit.
+  cursor += randomInt(150, 500);
+
+  return { interactions, submittedAt: Math.round(cursor) };
 }
 
 function sleep(ms) {
